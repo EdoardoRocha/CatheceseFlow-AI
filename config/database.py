@@ -1,9 +1,12 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from pymongo import AsyncMongoClient
 
-load_dotenv()
+# Carrega o .env localizado na raiz do módulo AI independentemente de onde o processo for iniciado
+_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV_PATH)
 
 _client: AsyncMongoClient | None = None
 _db = None

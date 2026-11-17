@@ -1,10 +1,15 @@
 import os
+from pathlib import Path
+from dotenv import load_dotenv
 from fastapi import HTTPException
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from ai.prompt import SYSTEM_PROMPT, USER_PROMPT_TEMPLATE
 from models.summary_model import StructuredSummary
+
+_ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_ENV_PATH)
 
 
 async def generate_lecture_summary(
