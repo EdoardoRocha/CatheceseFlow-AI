@@ -1,0 +1,6 @@
+from pathlib import Path
+import sys
+
+AI_ROOT = Path(__file__).resolve().parent.parent
+if str(AI_ROOT) not in sys.path:
+    sys.path.insert(0, str(AI_ROOT))
