@@ -3,6 +3,7 @@ from typing import Any, Literal
 from langchain_core.tools import tool
 
 from config.postgres import MAX_QUERY_LIMIT, fetch_all
+from tools.students_age_tool import get_brazil_today
 
 MAX_STUDENTS_LIMIT = MAX_QUERY_LIMIT
 
@@ -21,16 +22,19 @@ async def get_student_attendance(
     order_by: Literal["presences", "absences", "name"] = "presences",
     limit: int = 50,
 ) -> str:
-    """Consulta catequizandos (alunos), sacramentos (batismo e primeira comunhão), catequista responsável e contagem de presenças e faltas com justificativas.
+    """Consulta catequizandos (alunos), data de nascimento e idade atual calculada (`birth_date` e `age`), sacramentos (batismo e primeira comunhão), catequista responsável e contagem de presenças e faltas com justificativas.
 
-    Orientações de ordenação (`order_by`):
+    Orientações:
+    - Para perguntas focadas apenas em idade, faixa etária (`min_age`/`max_age`) ou ranking de mais velhos/novos, prefira a tool `get_students_age`.
     - Use `order_by="presences"` (padrão) para consultas sobre alunos mais presentes, ranking de assiduidade ou maior participação.
     - Use `order_by="absences"` para consultas sobre alunos mais faltosos ou com maior número de faltas.
     - Use `order_by="name"` para listagens gerais em ordem alfabética.
     - Use `limit` (padrão 50, intervalo seguro de 1 a 150) para controlar quantos alunos retornar.
     """
     conditions: list[str] = []
-    params: dict[str, Any] = {}
+    params: dict[str, Any] = {
+        "ref_date": get_brazil_today().isoformat(),
+    }
 
     if class_id is not None:
         conditions.append('s."ClassId" = %(class_id)s')
@@ -55,6 +59,8 @@ async def get_student_attendance(
             s."name",
             s."ClassId" AS class_id,
             c."type" AS class_type,
+            s."birth_date",
+            EXTRACT(YEAR FROM AGE(%(ref_date)s::date, s."birth_date"))::INT AS age,
             s."has_baptism",
             s."has_first_communion",
             u."name" AS catequista_name,
@@ -70,7 +76,7 @@ async def get_student_attendance(
         LEFT JOIN "Attendances" att ON att."StudentId" = s."id"
         LEFT JOIN "Absences" absn ON absn."StudentId" = s."id"
         {where_clause}
-        GROUP BY s."id", s."name", s."ClassId", c."type", s."has_baptism", s."has_first_communion", u."name"
+        GROUP BY s."id", s."name", s."ClassId", c."type", s."birth_date", s."has_baptism", s."has_first_communion", u."name"
         ORDER BY {order_clause}
         LIMIT %(limit)s
     """

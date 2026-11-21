@@ -38,6 +38,9 @@ def test_students_tool_returns_attendance_summary(monkeypatch):
     assert data["order_by"] == "presences"
     assert data["limit"] == 50
     assert 'ORDER BY presences_count DESC, s."name" ASC' in captured["sql"]
+    assert 's."birth_date"' in captured["sql"]
+    assert 'EXTRACT(YEAR FROM AGE(%(ref_date)s::date, s."birth_date"))::INT AS age' in captured["sql"]
+    assert "ref_date" in captured["params"]
     assert "LIMIT %(limit)s" in captured["sql"]
     assert captured["params"]["limit"] == 50
     assert captured["limit"] == 50
