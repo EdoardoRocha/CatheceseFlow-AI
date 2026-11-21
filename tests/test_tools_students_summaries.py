@@ -1,11 +1,17 @@
 import asyncio
 import json
+import pytest
 
 
 def test_students_tool_returns_attendance_summary(monkeypatch):
     from tools import students_tool
 
+    captured: dict = {}
+
     async def fake_fetch_all(sql, params=None, limit=50):
+        captured["sql"] = sql
+        captured["params"] = params
+        captured["limit"] = limit
         return [
             {
                 "id": 10,
@@ -29,6 +35,80 @@ def test_students_tool_returns_attendance_summary(monkeypatch):
     assert len(data["students"]) == 1
     assert data["students"][0]["absences_count"] == 2
     assert "Viagem" in data["students"][0]["absence_reasons"]
+    assert data["order_by"] == "presences"
+    assert data["limit"] == 50
+    assert 'ORDER BY presences_count DESC, s."name" ASC' in captured["sql"]
+    assert "LIMIT %(limit)s" in captured["sql"]
+    assert captured["params"]["limit"] == 50
+    assert captured["limit"] == 50
+
+
+@pytest.mark.parametrize(
+    ("order_by", "expected_clause"),
+    [
+        ("presences", 'ORDER BY presences_count DESC, s."name" ASC'),
+        ("absences", 'ORDER BY absences_count DESC, s."name" ASC'),
+        ("name", 'ORDER BY s."name" ASC'),
+    ],
+)
+def test_students_tool_dynamic_ordering(monkeypatch, order_by, expected_clause):
+    from tools import students_tool
+
+    captured: dict = {}
+
+    async def fake_fetch_all(sql, params=None, limit=50):
+        captured["sql"] = sql
+        captured["params"] = params
+        return []
+
+    monkeypatch.setattr(students_tool, "fetch_all", fake_fetch_all)
+    result = asyncio.run(
+        students_tool.get_student_attendance.ainvoke({"class_id": 4, "order_by": order_by})
+    )
+    data = json.loads(result)
+    assert expected_clause in captured["sql"]
+    assert data["order_by"] == order_by
+
+
+@pytest.mark.parametrize(
+    ("requested_limit", "expected_limit"),
+    [
+        (10, 10),
+        (120, 120),
+        (300, 150),
+        (0, 1),
+        (-5, 1),
+    ],
+)
+def test_students_tool_limit_clamping(monkeypatch, requested_limit, expected_limit):
+    from tools import students_tool
+
+    captured: dict = {}
+
+    async def fake_fetch_all(sql, params=None, limit=50):
+        captured["params"] = params
+        captured["limit"] = limit
+        return []
+
+    monkeypatch.setattr(students_tool, "fetch_all", fake_fetch_all)
+    result = asyncio.run(
+        students_tool.get_student_attendance.ainvoke({"limit": requested_limit})
+    )
+    data = json.loads(result)
+    assert captured["params"]["limit"] == expected_limit
+    assert captured["limit"] == expected_limit
+    assert data["limit"] == expected_limit
+
+
+def test_students_tool_handles_db_error_gracefully(monkeypatch):
+    from tools import students_tool
+
+    async def failing_fetch_all(sql, params=None, limit=50):
+        raise RuntimeError("Conexão Postgres falhou")
+
+    monkeypatch.setattr(students_tool, "fetch_all", failing_fetch_all)
+    result = asyncio.run(students_tool.get_student_attendance.ainvoke({}))
+    assert "Erro temporário ao consultar alunos e frequência no PostgreSQL" in result
 
 
 def test_summaries_tool_queries_mongodb_and_handles_failure(monkeypatch):

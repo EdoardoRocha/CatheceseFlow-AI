@@ -1,8 +1,16 @@
 import json
-from typing import Any
+from typing import Any, Literal
 from langchain_core.tools import tool
 
-from config.postgres import fetch_all
+from config.postgres import MAX_QUERY_LIMIT, fetch_all
+
+MAX_STUDENTS_LIMIT = MAX_QUERY_LIMIT
+
+_ORDER_BY_CLAUSES: dict[str, str] = {
+    "presences": 'presences_count DESC, s."name" ASC',
+    "absences": 'absences_count DESC, s."name" ASC',
+    "name": 's."name" ASC',
+}
 
 
 @tool
@@ -10,8 +18,17 @@ async def get_student_attendance(
     class_id: int | None = None,
     student_name: str | None = None,
     parish_id: int | None = None,
+    order_by: Literal["presences", "absences", "name"] = "presences",
+    limit: int = 50,
 ) -> str:
-    """Consulta catequizandos (alunos), sacramentos (batismo e primeira comunhão), catequista responsável e contagem de presenças e faltas com justificativas."""
+    """Consulta catequizandos (alunos), sacramentos (batismo e primeira comunhão), catequista responsável e contagem de presenças e faltas com justificativas.
+
+    Orientações de ordenação (`order_by`):
+    - Use `order_by="presences"` (padrão) para consultas sobre alunos mais presentes, ranking de assiduidade ou maior participação.
+    - Use `order_by="absences"` para consultas sobre alunos mais faltosos ou com maior número de faltas.
+    - Use `order_by="name"` para listagens gerais em ordem alfabética.
+    - Use `limit` (padrão 50, intervalo seguro de 1 a 150) para controlar quantos alunos retornar.
+    """
     conditions: list[str] = []
     params: dict[str, Any] = {}
 
@@ -28,6 +45,9 @@ async def get_student_attendance(
         params["parish_id"] = parish_id
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+    safe_limit = max(1, min(int(limit), MAX_STUDENTS_LIMIT))
+    order_clause = _ORDER_BY_CLAUSES.get(order_by, _ORDER_BY_CLAUSES["presences"])
+    params["limit"] = safe_limit
 
     sql = f"""
         SELECT
@@ -51,12 +71,21 @@ async def get_student_attendance(
         LEFT JOIN "Absences" absn ON absn."StudentId" = s."id"
         {where_clause}
         GROUP BY s."id", s."name", s."ClassId", c."type", s."has_baptism", s."has_first_communion", u."name"
-        ORDER BY absences_count DESC, s."name" ASC
-        LIMIT 50
+        ORDER BY {order_clause}
+        LIMIT %(limit)s
     """
 
     try:
-        rows = await fetch_all(sql, params=params, limit=50)
-        return json.dumps({"students": rows, "total": len(rows)}, ensure_ascii=False, default=str)
+        rows = await fetch_all(sql, params=params, limit=safe_limit)
+        return json.dumps(
+            {
+                "students": rows,
+                "total": len(rows),
+                "order_by": order_by,
+                "limit": safe_limit,
+            },
+            ensure_ascii=False,
+            default=str,
+        )
     except Exception as exc:
         return f"Erro temporário ao consultar alunos e frequência no PostgreSQL: {exc}"
