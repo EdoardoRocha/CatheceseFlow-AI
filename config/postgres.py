@@ -22,6 +22,8 @@ _FORBIDDEN_SQL_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
+MAX_QUERY_LIMIT = 150
+
 
 def resolve_postgres_dsn() -> str | None:
     """Resolve a URI de conexão do PostgreSQL respeitando o padrão do Backend."""
@@ -77,7 +79,7 @@ def _sync_fetch_all(
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     safe_sql = validate_read_only_sql(sql)
-    safe_limit = max(1, min(int(limit), 50))
+    safe_limit = max(1, min(int(limit), MAX_QUERY_LIMIT))
     dsn = resolve_postgres_dsn()
     if not dsn:
         raise RuntimeError(
