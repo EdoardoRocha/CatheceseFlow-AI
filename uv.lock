@@ -14,6 +14,7 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pymongo" },
+    { name = "pypdf" },
 ]
 
 [package.dev-dependencies]
@@ -30,6 +31,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.6.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.9" },
     { name = "pymongo", specifier = ">=4.20.0" },
+    { name = "pypdf", specifier = ">=7.1.1" },
 ]
 
 [package.metadata.requires-dev]
@@ -1145,6 +1147,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/10/2f/d017a4b73ff02dd6805da89600b9834aeac7c6c761bf65e5114900bd9858/pymongo-4.20.0-cp315-cp315t-win32.whl", hash = "sha256:1246f86e262b649ac7c8735eaaa94759c232b889dfa40f5a7ff828b840a6fbea", size = 821700, upload-time = "2026-11-12T20:52:18.145Z" },
     { url = "https://files.pythonhosted.org/packages/e0/90/f301b9aa74df40d3e494379f74bb1d2ad6a36eb7614005f7b104a3162620/pymongo-4.20.0-cp315-cp315t-win_amd64.whl", hash = "sha256:86cb4dc1522981123b28fffa2ab6295ffc3a89d4fbe3009b3420d1c1cbeac683", size = 829140, upload-time = "2026-11-12T20:52:19.643Z" },
     { url = "https://files.pythonhosted.org/packages/ba/9c/dd7c1704e3be23f5fb734ffaa67387c626be19ec6de8811cce26643058f8/pymongo-4.20.0-cp315-cp315t-win_arm64.whl", hash = "sha256:9eedc619215732e040729ccd040744087fdfcc12fffbc96006768f4d11701851", size = 822546, upload-time = "2026-11-12T20:52:22.039Z" },
+]
+
+[[package]]
+name = "pypdf"
+version = "7.1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/5f/f41984a8150ec37c6ee50fa6fa1868d065337b65ba510a155848b2ce0b62/pypdf-7.1.1.tar.gz", hash = "sha256:2eff4e2fc5fb22a6d6711e6f1166cdc9ab5765d90cd0d77dfea3f4aa91a27b1d", size = 7221452, upload-time = "2026-11-18T11:51:08.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/ef/11ed995bd10a1632f7fea3da38ae8d42bc3ccc5b9969fe04d8620c844408/pypdf-7.1.1-py3-none-any.whl", hash = "sha256:04c5680d4b4cfa04ab505b09393fc949860c34a4dad6565284d11a2f5c3ce8b1", size = 421026, upload-time = "2026-11-18T11:51:06.563Z" },
 ]
 
 [[package]]

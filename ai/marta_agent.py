@@ -20,7 +20,7 @@ from tools import MARTA_TOOLS, TOOLS_BY_NAME
 _ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_ENV_PATH)
 
-MAX_ITERATIONS = 3
+MAX_ITERATIONS = 4
 
 
 def ensure_openai_api_key() -> str:
@@ -87,15 +87,31 @@ def _format_sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def _extract_attachment(tool_name: str, output: object) -> dict | None:
+    if tool_name != "generate_formation_pdf" or not isinstance(output, str):
+        return None
+    try:
+        parsed = json.loads(output)
+    except json.JSONDecodeError:
+        return None
+
+    attachment = parsed.get("attachment") if isinstance(parsed, dict) else None
+    if not isinstance(attachment, dict) or not attachment.get("id"):
+        return None
+    return attachment
+
+
 async def run_marta_chat(
     request: MartaChatRequest,
     llm: ChatOpenAI | None = None,
-) -> tuple[str, list[str]]:
+) -> tuple[str, list[str], list[dict]]:
     """Executa o fluxo completo da martaAI em bloco único (JSON)."""
     model = llm or create_marta_llm()
     model_with_tools = model.bind_tools(MARTA_TOOLS)
     messages = _build_initial_messages(request)
     tools_used: list[str] = []
+    attachments: list[dict] = []
+    seen_attachment_ids: set[str] = set()
 
     for _ in range(MAX_ITERATIONS):
         ai_msg = await model_with_tools.ainvoke(messages)
@@ -103,28 +119,36 @@ async def run_marta_chat(
 
         tool_calls = getattr(ai_msg, "tool_calls", None) or []
         if not tool_calls:
-            return _extract_text(ai_msg.content), tools_used
+            return _extract_text(ai_msg.content), tools_used, attachments
 
         for tc in tool_calls:
             tool_name = str(tc.get("name", ""))
             if tool_name and tool_name not in tools_used:
                 tools_used.append(tool_name)
-            messages.append(await _execute_tool_call(tc))
+            tool_msg = await _execute_tool_call(tc)
+            messages.append(tool_msg)
+
+            attachment = _extract_attachment(tool_name, tool_msg.content)
+            if attachment and str(attachment["id"]) not in seen_attachment_ids:
+                seen_attachment_ids.add(str(attachment["id"]))
+                attachments.append(attachment)
 
     # Síntese final sem novas ferramentas caso atinja MAX_ITERATIONS
     final_msg = await model.ainvoke(messages)
-    return _extract_text(final_msg.content), tools_used
+    return _extract_text(final_msg.content), tools_used, attachments
 
 
 async def stream_marta_chat(
     request: MartaChatRequest,
     llm: ChatOpenAI | None = None,
 ) -> AsyncIterator[str]:
-    """Executa o agente da martaAI emitindo eventos SSE (tool, token, done)."""
+    """Executa o agente da martaAI emitindo eventos SSE (tool, attachment, token, done)."""
     model = llm or create_marta_llm()
     model_with_tools = model.bind_tools(MARTA_TOOLS)
     messages = _build_initial_messages(request)
     tools_used: list[str] = []
+    attachments: list[dict] = []
+    seen_attachment_ids: set[str] = set()
 
     try:
         for _ in range(MAX_ITERATIONS):
@@ -142,7 +166,10 @@ async def stream_marta_chat(
             messages.append(accumulated)
             tool_calls = getattr(accumulated, "tool_calls", None) or []
             if not tool_calls:
-                yield _format_sse("done", {"tools_used": tools_used})
+                yield _format_sse(
+                    "done",
+                    {"tools_used": tools_used, "attachments": attachments},
+                )
                 return
 
             for tc in tool_calls:
@@ -150,7 +177,14 @@ async def stream_marta_chat(
                 if tool_name and tool_name not in tools_used:
                     tools_used.append(tool_name)
                 yield _format_sse("tool", {"tool": tool_name})
-                messages.append(await _execute_tool_call(tc))
+                tool_msg = await _execute_tool_call(tc)
+                messages.append(tool_msg)
+
+                attachment = _extract_attachment(tool_name, tool_msg.content)
+                if attachment and str(attachment["id"]) not in seen_attachment_ids:
+                    seen_attachment_ids.add(str(attachment["id"]))
+                    attachments.append(attachment)
+                    yield _format_sse("attachment", attachment)
 
         # Limite atingido: gera resposta final em streaming sem ferramentas
         async for chunk in model.astream(messages):
@@ -158,6 +192,9 @@ async def stream_marta_chat(
             if text_delta:
                 yield _format_sse("token", {"content": text_delta})
 
-        yield _format_sse("done", {"tools_used": tools_used})
+        yield _format_sse(
+            "done",
+            {"tools_used": tools_used, "attachments": attachments},
+        )
     except Exception as exc:
         yield _format_sse("error", {"detail": str(exc)})

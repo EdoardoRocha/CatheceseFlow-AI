@@ -44,6 +44,15 @@ class MartaChatRequest(BaseModel):
         return value[-10:]
 
 
+class MartaAttachment(BaseModel):
+    type: Literal["pdf"] = "pdf"
+    id: str
+    title: str
+    filename: str
+    download_path: str
+
+
 class MartaChatResponse(BaseModel):
     reply: str
     tools_used: list[str] = Field(default_factory=list)
+    attachments: list[MartaAttachment] = Field(default_factory=list)
