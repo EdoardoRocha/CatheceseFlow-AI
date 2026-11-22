@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from config.database import init
-from routers import ai_router, marta_router
+from routers import ai_router, knowledge_router, marta_router
 
 
 @asynccontextmanager
@@ -28,3 +28,4 @@ app.add_middleware(
 
 app.include_router(ai_router.router)
 app.include_router(marta_router.router)
+app.include_router(knowledge_router.router)
